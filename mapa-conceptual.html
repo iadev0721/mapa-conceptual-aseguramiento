@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa Conceptual - Aseguramiento de la Calidad del Software</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Inter',system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+:root{
+  --gold:#f0c040;--gold-dim:rgba(240,192,64,0.15);
+  --sky:#58a6ff;--sky-dim:rgba(88,166,255,0.10);--sky-border:rgba(88,166,255,0.25);--sky-glow:0 0 20px rgba(88,166,255,0.12);
+  --emerald:#3dd68c;--emerald-dim:rgba(61,214,140,0.10);--emerald-border:rgba(61,214,140,0.25);--emerald-glow:0 0 20px rgba(61,214,140,0.12);
+  --amber:#f0a030;--amber-dim:rgba(240,160,48,0.10);--amber-border:rgba(240,160,48,0.25);--amber-glow:0 0 20px rgba(240,160,48,0.12);
+  --violet:#a78bfa;--violet-dim:rgba(167,139,250,0.10);--violet-border:rgba(167,139,250,0.25);--violet-glow:0 0 20px rgba(167,139,250,0.12);
+  --surface:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.06);
+  --text-1:#e2e8f0;--text-2:#8b95a8;--text-3:#525c6e;
+  --panel-bg:rgba(12,16,30,0.92);
+}
+
+/* === VIEWPORT === */
+#viewport{position:fixed;inset:0;z-index:1;overflow:hidden;cursor:grab;
+  background-size:32px 32px;
+  background-image:radial-gradient(circle,rgba(255,255,255,0.025) 1px,transparent 1px)}
+#viewport.grabbing{cursor:grabbing}
+#canvas{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+
+/* === HEADER (inside canvas) === */
+#map-header{position:absolute;top:10px;left:0;width:3200px;text-align:center;pointer-events:none}
+#map-header h1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;letter-spacing:0.06em;
+  color:var(--gold);text-shadow:0 0 30px rgba(240,192,64,0.25)}
+#map-header .subtitle{font-size:12px;color:var(--text-2);letter-spacing:0.05em;margin-top:4px;font-weight:400}
+
+/* === MAP CONTAINER === */
+#map-container{position:absolute;top:0;left:0}
+#connections{position:absolute;top:0;left:0;pointer-events:none;z-index:1;overflow:visible}
+#nodes{position:relative;z-index:2}
+
+/* === CONNECTIONS === */
+.conn-path{fill:none;stroke-width:1.5;stroke-linecap:round;opacity:0.35;transition:opacity 0.3s,stroke-width 0.3s}
+.conn-path.hierarchy{stroke-width:1.8}
+.conn-path.crosslink{stroke-width:1.2;stroke-dasharray:5,4;opacity:0.18}
+.conn-path.highlighted{stroke-width:2.5;opacity:0.9!important}
+.conn-path.faded{opacity:0.04!important}
+.cross-label{font-family:'Inter',sans-serif;font-size:9px;fill:var(--text-3);text-anchor:middle;dominant-baseline:middle;pointer-events:none;font-weight:500;opacity:0.6}
+
+/* === NODES === */
+.node{
+  position:absolute;border-radius:10px;padding:7px 14px;text-align:center;cursor:pointer;
+  transition:box-shadow 0.3s,opacity 0.25s,border-color 0.25s,background 0.25s,transform 0.25s cubic-bezier(.4,1.6,.6,1);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--border);white-space:nowrap;user-select:none;
+  opacity:0;animation:nodeIn 0.4s ease forwards;
+  font-feature-settings:'cv01' 1,'ss01' 1;
+}
+@keyframes nodeIn{to{opacity:1}}
+.node:hover{z-index:20!important;transform:scale(1.06)!important}
+
+.node.level-0{
+  background:linear-gradient(135deg,#f0c040 0%,#e8a020 100%);color:#0a0e1a;border:none;
+  font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;letter-spacing:0.02em;
+  padding:14px 32px;border-radius:14px;
+  box-shadow:0 0 40px rgba(240,192,64,0.2),0 4px 24px rgba(0,0,0,0.4)}
+.node.level-0:hover{transform:scale(1.04)!important;box-shadow:0 0 60px rgba(240,192,64,0.3),0 6px 32px rgba(0,0,0,0.5)}
+
+.node.level-1{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;letter-spacing:0.02em;padding:8px 16px;border-radius:10px;border-width:1.5px}
+.node.level-2{font-weight:500;font-size:11px;padding:6px 12px;border-radius:8px}
+.node.level-3{font-weight:400;font-size:10px;padding:5px 10px;border-radius:7px;border-width:0.75px;opacity:0;animation-delay:0.15s}
+
+.node.branch-sky{background:var(--sky-dim);border-color:var(--sky-border);color:var(--sky)}
+.node.branch-sky:hover{box-shadow:var(--sky-glow);border-color:var(--sky);background:rgba(88,166,255,0.16)}
+.node.branch-emerald{background:var(--emerald-dim);border-color:var(--emerald-border);color:var(--emerald)}
+.node.branch-emerald:hover{box-shadow:var(--emerald-glow);border-color:var(--emerald);background:rgba(61,214,140,0.16)}
+.node.branch-amber{background:var(--amber-dim);border-color:var(--amber-border);color:var(--amber)}
+.node.branch-amber:hover{box-shadow:var(--amber-glow);border-color:var(--amber);background:rgba(240,160,48,0.16)}
+.node.branch-violet{background:var(--violet-dim);border-color:var(--violet-border);color:var(--violet)}
+.node.branch-violet:hover{box-shadow:var(--violet-glow);border-color:var(--violet);background:rgba(167,139,250,0.16)}
+
+.node.faded{opacity:0.06!important;transform:scale(0.97)!important;pointer-events:none}
+.node.highlighted{z-index:15!important;transform:scale(1.04)}
+
+/* === TOOLTIP === */
+#tooltip{position:fixed;z-index:2000;max-width:380px;padding:16px 20px;
+  background:var(--panel-bg);border:1px solid var(--border);border-radius:14px;
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  box-shadow:0 24px 64px rgba(0,0,0,0.6);
+  opacity:0;pointer-events:none;transition:opacity 0.15s,transform 0.2s cubic-bezier(.4,1.6,.6,1);
+  transform:translateY(6px) scale(0.95)}
+#tooltip.visible{opacity:1;transform:translateY(0) scale(1)}
+#tooltip .tt-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:2px 8px;border-radius:4px;margin-bottom:8px}
+#tooltip .tt-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;margin-bottom:8px}
+#tooltip .tt-def{font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:10px}
+#tooltip .tt-example{font-size:11px;color:var(--text-1);background:rgba(255,255,255,0.04);border:1px solid var(--border);padding:8px 12px;border-radius:8px;line-height:1.5}
+#tooltip .tt-example strong{color:var(--text-2);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:3px}
+
+/* === HUD: ZOOM === */
+#zoom-bar{position:fixed;bottom:20px;left:20px;z-index:500;display:flex;align-items:center;gap:1px;
+  background:var(--panel-bg);border:1px solid var(--border);border-radius:10px;
+  backdrop-filter:blur(16px);box-shadow:0 8px 32px rgba(0,0,0,0.4);padding:3px 4px;
+  animation:fadeUp 0.6s ease 0.5s both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+#zoom-bar button{background:0;border:0;color:var(--text-2);cursor:pointer;width:30px;height:30px;border-radius:7px;
+  display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.15s}
+#zoom-bar button:hover{background:rgba(255,255,255,0.06);color:var(--text-1)}
+#zoom-bar button svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none}
+#zoom-pct{font-size:10px;font-weight:600;color:var(--text-2);min-width:42px;text-align:center;letter-spacing:0.04em}
+#zoom-bar .sep{width:1px;height:18px;background:var(--border);margin:0 2px}
+
+/* === HUD: LEGEND === */
+#legend{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:500;display:flex;gap:18px;
+  padding:8px 20px;background:var(--panel-bg);border:1px solid var(--border);border-radius:10px;
+  backdrop-filter:blur(16px);box-shadow:0 8px 32px rgba(0,0,0,0.4);
+  animation:fadeUp 0.6s ease 0.8s both}
+.legend-item{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--text-2);font-weight:500;letter-spacing:0.02em}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+
+/* === HUD: QUICK NAV === */
+#nav-toggle{position:fixed;top:16px;right:16px;z-index:600;width:36px;height:36px;border-radius:9px;
+  background:var(--panel-bg);border:1px solid var(--border);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--text-2);
+  transition:all 0.2s;animation:fadeUp 0.6s ease 0.3s both}
+#nav-toggle:hover{background:rgba(255,255,255,0.06);color:var(--text-1)}
+#nav-toggle svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none}
+
+#nav-panel{position:fixed;top:60px;right:16px;z-index:500;width:260px;max-height:calc(100vh - 100px);
+  background:var(--panel-bg);border:1px solid var(--border);border-radius:12px;
+  backdrop-filter:blur(20px);box-shadow:0 16px 48px rgba(0,0,0,0.5);
+  overflow:hidden;display:none;animation:fadeUp 0.3s ease both}
+#nav-panel.open{display:flex;flex-direction:column}
+#nav-search{width:100%;padding:10px 14px;background:transparent;border:none;border-bottom:1px solid var(--border);
+  color:var(--text-1);font-family:'Inter',sans-serif;font-size:12px;outline:none}
+#nav-search::placeholder{color:var(--text-3)}
+#nav-list{flex:1;overflow-y:auto;padding:6px 0;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.08) transparent}
+#nav-list::-webkit-scrollbar{width:4px}
+#nav-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:4px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;font-size:11px;color:var(--text-2);
+  transition:background 0.15s,color 0.15s;border-left:2px solid transparent;font-weight:400}
+.nav-item:hover{background:rgba(255,255,255,0.04);color:var(--text-1)}
+.nav-item .nav-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.nav-item.l1{font-weight:600;font-size:11.5px;padding-left:14px}
+.nav-item.l2{padding-left:28px}
+.nav-item.l3{padding-left:42px;font-size:10px;color:var(--text-3)}
+.nav-section{padding:8px 14px 4px;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-3)}
+
+/* === HUD: MINIMAP === */
+#minimap{position:fixed;bottom:20px;right:16px;z-index:500;width:180px;height:110px;
+  background:var(--panel-bg);border:1px solid var(--border);border-radius:10px;
+  backdrop-filter:blur(16px);box-shadow:0 8px 32px rgba(0,0,0,0.4);overflow:hidden;cursor:pointer;
+  animation:fadeUp 0.6s ease 1s both}
+#minimap canvas{width:100%;height:100%;display:block}
+#minimap .vp-rect{position:absolute;border:1.5px solid rgba(240,192,64,0.5);border-radius:2px;
+  background:rgba(240,192,64,0.04);pointer-events:none}
+
+/* === RESPONSIVE === */
+@media(max-width:900px){
+  #minimap{display:none}
+  #legend{gap:10px;padding:7px 12px;bottom:12px}
+  #zoom-bar{bottom:12px;left:12px}
+  #nav-panel{width:220px;right:10px;top:54px}
+  #nav-toggle{right:10px;top:10px}
+}
+</style>
+</head>
+<body>
+
+<div id="viewport">
+  <div id="canvas">
+    <div id="map-header">
+      <h1>Aseguramiento de la Calidad del Software</h1>
+      <div class="subtitle">Mapa Conceptual &mdash; Calidad y M&eacute;tricas de Software</div>
+    </div>
+    <div id="map-container">
+      <svg id="connections" xmlns="http://www.w3.org/2000/svg"><defs>
+        <marker id="a-sky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 1L9 5L0 9z" fill="#58a6ff"/></marker>
+        <marker id="a-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 1L9 5L0 9z" fill="#3dd68c"/></marker>
+        <marker id="a-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 1L9 5L0 9z" fill="#f0a030"/></marker>
+        <marker id="a-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 1L9 5L0 9z" fill="#a78bfa"/></marker>
+      </defs></svg>
+      <div id="nodes"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="zoom-bar">
+  <button id="z-out" title="Alejar"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+  <div class="sep"></div>
+  <span id="zoom-pct">100%</span>
+  <div class="sep"></div>
+  <button id="z-in" title="Acercar"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+  <div class="sep"></div>
+  <button id="z-fit" title="Ajustar (Espacio)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg></button>
+</div>
+
+<div id="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--sky)"></div>Fundamentos</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--emerald)"></div>Dimensiones</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Actividades</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--violet)"></div>Defectos y M&eacute;tricas</div>
+</div>
+
+<button id="nav-toggle" title="Navegaci&oacute;n r&aacute;pida">
+  <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+</button>
+<div id="nav-panel">
+  <input id="nav-search" type="text" placeholder="Buscar nodo...">
+  <div id="nav-list"></div>
+</div>
+
+<div id="minimap"><canvas></canvas><div class="vp-rect"></div></div>
+
+<script>
+/* ========================================================================= */
+/* DATA - todos los caracteres en UTF-8 directo                              */
+/* ========================================================================= */
+const BRANCH_MAP = {blue:"sky",green:"emerald",orange:"amber",purple:"violet",root:"root"};
+const BRANCH_COLORS = {sky:"#58a6ff",emerald:"#3dd68c",amber:"#f0a030",violet:"#a78bfa",root:"#f0c040"};
+const BRANCH_LABELS = {sky:"Fundamentos",emerald:"Dimensiones",amber:"Actividades",violet:"Defectos y M\u00e9tricas"};
+
+const data={nodes:[
+{id:"sqa",label:"Aseguramiento de la Calidad del Software",level:0,branch:"root",
+  def:"Conjunto de actividades planificadas y sistem\u00e1ticas para garantizar que el software cumple los requisitos de calidad.",
+  ej:"Implementar un SGC basado en ISO 9001 para desarrollar software bancario cr\u00edtico."},
+{id:"calidad",label:"Calidad",level:1,branch:"blue",
+  def:"Grado en que un conjunto de caracter\u00edsticas inherentes cumple con los requisitos.",
+  ej:"Un ERP que procesa 10.000 transacciones diarias sin errores."},
+{id:"def-calidad",label:"Definiciones de Calidad",level:2,branch:"blue",
+  def:"M\u00faltiples perspectivas para definir calidad: trascendente, basada en usuario, producto, fabricaci\u00f3n y valor.",
+  ej:"Juran: adecuaci\u00f3n al uso. Crosby: conformidad con los requisitos."},
+{id:"trascendente",label:"Perspectiva Trascendente",level:3,branch:"blue",
+  def:"La calidad como excelencia innata, universalmente reconocible.",
+  ej:"Usuarios reconocen calidad en una interfaz sin leer especificaciones."},
+{id:"basada-usuario",label:"Basada en el Usuario",level:3,branch:"blue",
+  def:"La calidad se define por la capacidad del producto de satisfacer necesidades del usuario final.",
+  ej:"App de calidad si los usuarios la encuentran intuitiva y \u00fatil."},
+{id:"basada-producto",label:"Basada en el Producto",level:3,branch:"blue",
+  def:"Calidad medida por atributos medibles del producto: cohesi\u00f3n, acoplamiento, cobertura.",
+  ej:"Software con cobertura >90% y alta cohesi\u00f3n."},
+{id:"costo-calidad",label:"Costo de la Calidad (CoQ)",level:2,branch:"blue",
+  def:"Suma de costos de prevenci\u00f3n, evaluaci\u00f3n y fallas. Invertir en prevenci\u00f3n reduce fallas.",
+  ej:"Invertir $10K en pruebas automatizadas evita $100K en soporte."},
+{id:"prevencion",label:"Costos de Prevenci\u00f3n",level:3,branch:"blue",
+  def:"Inversiones para evitar defectos: capacitaci\u00f3n, herramientas, planificaci\u00f3n.",
+  ej:"Capacitar al equipo en TDD y SOLID antes de desarrollar."},
+{id:"evaluacion",label:"Costos de Evaluaci\u00f3n",level:3,branch:"blue",
+  def:"Costos de medir y auditar: pruebas, revisiones, inspecciones.",
+  ej:"Pruebas de carga semanales y auditor\u00edas quincenales."},
+{id:"fallas-ext",label:"Costos de Fallas",level:3,branch:"blue",
+  def:"Costos por incumplimiento: retrabajo, parches, p\u00e9rdida de clientes.",
+  ej:"Parche urgente por vulnerabilidad que afect\u00f3 a 50K usuarios."},
+{id:"tqm",label:"Gesti\u00f3n de Calidad Total (TQM)",level:2,branch:"blue",
+  def:"Enfoque de gesti\u00f3n participativa donde toda la organizaci\u00f3n se compromete con la calidad.",
+  ej:"Cada developer responsable de calidad, revisiones cruzadas y m\u00e9tricas visibles."},
+{id:"qa",label:"Aseguramiento de Calidad (QA)",level:1,branch:"blue",
+  def:"Actividades planificadas para proporcionar confianza de que el producto cumplir\u00e1 requisitos de calidad.",
+  ej:"Revisiones de dise\u00f1o, est\u00e1ndares de c\u00f3digo y auditor\u00edas en cada fase."},
+{id:"procesos-qa",label:"Procesos de QA",level:2,branch:"blue",
+  def:"Procedimientos documentados que gu\u00edan actividades de aseguramiento de calidad.",
+  ej:"Revisi\u00f3n de requisitos, inspecci\u00f3n de dise\u00f1o y auditor\u00eda post-implementaci\u00f3n."},
+{id:"plan-qa",label:"Plan de QA",level:2,branch:"blue",
+  def:"Documento con actividades, recursos, responsabilidades y cronograma de QA.",
+  ej:"Plan de QA para migraci\u00f3n a la nube con hitos y criterios de aceptaci\u00f3n."},
+{id:"auditorias-qa",label:"Auditor\u00edas de QA",level:2,branch:"blue",
+  def:"Ex\u00e1menes independientes para verificar que actividades de calidad cumplen lo planificado.",
+  ej:"Auditar trimestralmente procesos de control de versiones."},
+{id:"mejora-continua",label:"Mejora Continua",level:2,branch:"blue",
+  def:"Esfuerzo constante por mejorar productos y procesos mediante cambios incrementales.",
+  ej:"Retrospectivas quincenales con identificaci\u00f3n e implementaci\u00f3n de mejoras."},
+{id:"pdca",label:"Ciclo PDCA (Deming)",level:3,branch:"blue",
+  def:"M\u00e9todo iterativo: Planificar, Hacer, Verificar, Actuar.",
+  ej:"Planificar linter, ejecutar piloto, verificar, estandarizar."},
+{id:"kaizen",label:"Kaizen",level:3,branch:"blue",
+  def:"Filosof\u00eda japonesa de mejora mediante peque\u00f1os cambios incrementales.",
+  ej:"Cada developer propone mejora semanal al CI/CD."},
+{id:"qc",label:"Control de Calidad (QC)",level:1,branch:"blue",
+  def:"T\u00e9cnicas operativas para verificar que el producto cumple requisitos de calidad.",
+  ej:"Ejecutar 500 pruebas automatizadas antes de cada release."},
+{id:"inspeccion",label:"Inspecci\u00f3n de Productos",level:2,branch:"blue",
+  def:"Examen directo del producto para identificar defectos sin ejecutarlo.",
+  ej:"Revisar 1.000 l\u00edneas de c\u00f3digo cr\u00edtico buscando vulnerabilidades."},
+{id:"pruebas-qc",label:"Pruebas T\u00e9cnicas",level:2,branch:"blue",
+  def:"Ejecuci\u00f3n sistem\u00e1tica del software para identificar defectos.",
+  ej:"Pruebas de carga con 10K usuarios verificando respuesta <2s."},
+{id:"muestreo",label:"Muestreo Estad\u00edstico",level:2,branch:"blue",
+  def:"Examina muestra representativa para inferir calidad del lote completo.",
+  ej:"Seleccionar 10% de m\u00f3dulos grandes para revisi\u00f3n detallada."},
+{id:"aceptacion",label:"Aceptaci\u00f3n o Rechazo",level:2,branch:"blue",
+  def:"Decisi\u00f3n formal sobre si un producto cumple criterios predefinidos.",
+  ej:"Sprint review: PO acepta 8 HU y rechaza 2."},
+{id:"cultura-calidad",label:"Cultura de Calidad",level:1,branch:"blue",
+  def:"Valores y comportamientos compartidos que priorizan la calidad en toda la organizaci\u00f3n.",
+  ej:"Cada developer se siente responsable del producto, no solo de su c\u00f3digo."},
+{id:"liderazgo",label:"Liderazgo y Compromiso",level:2,branch:"blue",
+  def:"Participaci\u00f3n activa de la alta direcci\u00f3n promoviendo calidad.",
+  ej:"CTO asiste a retrospectivas y destina 20% a mejoras t\u00e9cnicas."},
+{id:"participacion",label:"Participaci\u00f3n del Equipo",level:2,branch:"blue",
+  def:"Involucramiento de todos en actividades de calidad.",
+  ej:"Programa de sugerencias donde developers proponen mejoras."},
+{id:"capacitacion",label:"Capacitaci\u00f3n Continua",level:2,branch:"blue",
+  def:"Formaci\u00f3n permanente en pr\u00e1cticas y herramientas de calidad.",
+  ej:"Talleres mensuales de coding dojo para todo el equipo."},
+{id:"estandares",label:"Est\u00e1ndares y Normativas",level:1,branch:"blue",
+  def:"Normas de organismos reconocidos que definen criterios de calidad.",
+  ej:"Certificar procesos bajo ISO 9001:2015."},
+{id:"iso-9001",label:"ISO 9001",level:2,branch:"blue",
+  def:"Norma internacional para SGC con enfoque en procesos y mejora continua.",
+  ej:"Certificaci\u00f3n ISO 9001 demostrando procesos de QA auditados."},
+{id:"ieee-730",label:"IEEE 730",level:2,branch:"blue",
+  def:"Est\u00e1ndar IEEE para Planes de QA de software.",
+  ej:"Plan de QA para software cr\u00edtico de seguridad a\u00e9rea."},
+{id:"cmmi",label:"CMMI",level:2,branch:"blue",
+  def:"Modelo de Madurez de Capacidades para evaluar procesos (1-5).",
+  ej:"Empresa nivel 3 CMMI con procesos estandarizados."},
+{id:"iso-25000",label:"ISO 25000 (SQuaRE)",level:2,branch:"blue",
+  def:"Modelo de calidad: funcionalidad, confiabilidad, usabilidad, eficiencia, mantenibilidad, portabilidad.",
+  ej:"Evaluar sistema hospitalario contra ISO 25000."},
+{id:"calidad-producto",label:"Calidad de Producto",level:1,branch:"green",
+  def:"Caracter\u00edsticas del producto que determinan su capacidad de satisfacer necesidades.",
+  ej:"CRM con alta usabilidad, cero ca\u00eddas y respuesta <200ms."},
+{id:"funcionalidad",label:"Funcionalidad",level:2,branch:"green",
+  def:"Capacidad de proveer funciones que satisfacen necesidades.",
+  ej:"Facturaci\u00f3n que calcula IVA, genera PDF y env\u00eda por email."},
+{id:"confiabilidad",label:"Confiabilidad",level:2,branch:"green",
+  def:"Capacidad de mantener rendimiento bajo condiciones definidas.",
+  ej:"Sistema con 99,9% uptime y failover autom\u00e1tico."},
+{id:"usabilidad",label:"Usabilidad",level:2,branch:"green",
+  def:"Facilidad de uso para lograr metas con eficacia y satisfacci\u00f3n.",
+  ej:"App que nuevos usuarios aprenden en <5 minutos."},
+{id:"eficiencia",label:"Eficiencia",level:2,branch:"green",
+  def:"Rendimiento relativo a los recursos usados.",
+  ej:"API que procesa 5.000 req/s con <200MB RAM."},
+{id:"mantenibilidad",label:"Mantenibilidad",level:2,branch:"green",
+  def:"Facilidad para modificar el software.",
+  ej:"C\u00f3digo modular que permite agregar endpoint en 30 min."},
+{id:"portabilidad",label:"Portabilidad",level:2,branch:"green",
+  def:"Capacidad de transferirse entre entornos.",
+  ej:"App Node.js desplegada sin cambios en AWS, Azure y GCP."},
+{id:"seguridad",label:"Seguridad",level:2,branch:"green",
+  def:"Protecci\u00f3n de datos contra acceso no autorizado.",
+  ej:"Autenticaci\u00f3n 2FA, cifrado TLS 1.3, auditor\u00eda de accesos."},
+{id:"calidad-proceso",label:"Calidad del Proceso",level:1,branch:"green",
+  def:"Grado en que los procesos de desarrollo est\u00e1n definidos y mejorados.",
+  ej:"Proceso con retrospectivas, m\u00e9tricas y mejora continua."},
+{id:"madurez-proceso",label:"Madurez del Proceso",level:2,branch:"green",
+  def:"Nivel de definici\u00f3n y control seg\u00fan modelos como CMMI.",
+  ej:"Equipo nivel 3 CMMI con m\u00e9tricas de desempe\u00f1o."},
+{id:"cumplimiento",label:"Cumplimiento de Est\u00e1ndares",level:2,branch:"green",
+  def:"Grado de cumplimiento con est\u00e1ndares y regulaciones.",
+  ej:"Desarrollo cumple GDPR, PCI-DSS y est\u00e1ndares internos."},
+{id:"eficacia-proceso",label:"Eficacia del Proceso",level:2,branch:"green",
+  def:"Medida de si el proceso produce resultados esperados.",
+  ej:"95% de sprints completan todos los objetivos planificados."},
+{id:"metricas-proceso",label:"M\u00e9tricas del Proceso",level:2,branch:"green",
+  def:"Indicadores cuantitativos: velocidad, tiempo de ciclo, DRE.",
+  ej:"DRE mide % de defectos encontrados antes de producci\u00f3n."},
+{id:"mejora-procesos",label:"Mejora de Procesos (SPI)",level:2,branch:"green",
+  def:"Programa sistem\u00e1tico para mejorar procesos mediante modelos y m\u00e9tricas.",
+  ej:"DevOps reduce tiempo de release de 2 semanas a 2 d\u00edas."},
+{id:"verificacion-validacion",label:"Verificaci\u00f3n y Validaci\u00f3n (V&V)",level:1,branch:"orange",
+  def:"Verificaci\u00f3n: construir correctamente. Validaci\u00f3n: construir el producto correcto.",
+  ej:"Verificar c\u00f3digo contra especificaciones, validar que resuelve necesidad."},
+{id:"verificacion",label:"Verificaci\u00f3n",level:2,branch:"orange",
+  def:"Evaluaci\u00f3n para determinar si cada fase satisface condiciones iniciales.",
+  ej:"Revisar dise\u00f1o BD contra modelo entidad-relaci\u00f3n."},
+{id:"verificacion-estatica",label:"Verificaci\u00f3n Est\u00e1tica",level:3,branch:"orange",
+  def:"An\u00e1lisis sin ejecutar: revisiones, inspecciones, an\u00e1lisis automatizado.",
+  ej:"ESLint y SonarQube para verificar calidad sin ejecutar."},
+{id:"validacion",label:"Validaci\u00f3n",level:2,branch:"orange",
+  def:"Evaluaci\u00f3n del producto final para verificar que satisface necesidades reales.",
+  ej:"Demo con cliente verificando que resuelve su problema."},
+{id:"validacion-dinamica",label:"Validaci\u00f3n Din\u00e1mica",level:3,branch:"orange",
+  def:"Pruebas ejecutando software con datos reales.",
+  ej:"Pruebas de aceptaci\u00f3n en entorno de staging."},
+{id:"pruebas-unitarias",label:"Pruebas Unitarias",level:2,branch:"orange",
+  def:"Pruebas a nivel de componente individual.",
+  ej:"JUnit que verifica calculateTax() devuelve 21%."},
+{id:"tdd",label:"TDD (Test-Driven Dev)",level:3,branch:"orange",
+  def:"Escribir prueba antes del c\u00f3digo: Red-Green-Refactor.",
+  ej:"Escribir test, implementar m\u00ednimo c\u00f3digo, refactorizar."},
+{id:"pruebas-integracion",label:"Pruebas de Integraci\u00f3n",level:2,branch:"orange",
+  def:"Verifican interacci\u00f3n correcta entre m\u00f3dulos.",
+  ej:"Verificar integraci\u00f3n de pagos con pasarela Stripe."},
+{id:"integracion-continua",label:"Integraci\u00f3n Continua (CI)",level:3,branch:"orange",
+  def:"Integrar c\u00f3digo frecuentemente con builds y pruebas automatizadas.",
+  ej:"Cada push ejecuta pipeline con lint, tests, build."},
+{id:"pruebas-sistema",label:"Pruebas de Sistema",level:2,branch:"orange",
+  def:"Pruebas del sistema completo integrado.",
+  ej:"Flujo: registro, login, compra, pago, email."},
+{id:"pruebas-rendimiento",label:"Pruebas de Rendimiento",level:3,branch:"orange",
+  def:"Pruebas no funcionales: velocidad, estabilidad, recursos.",
+  ej:"Carga con 10K usuarios virtuales."},
+{id:"pruebas-aceptacion",label:"Pruebas de Aceptaci\u00f3n",level:2,branch:"orange",
+  def:"Pruebas del cliente para determinar si el sistema es aceptado.",
+  ej:"Cliente ejecuta casos y firma acta de aceptaci\u00f3n."},
+{id:"pruebas-regresion",label:"Pruebas de Regresi\u00f3n",level:2,branch:"orange",
+  def:"Re-ejecuci\u00f3n de pruebas tras cambios.",
+  ej:"Suite de 2.000 tests en cada PR."},
+{id:"inspecciones-auditorias",label:"Inspecciones y Auditor\u00edas",level:1,branch:"orange",
+  def:"T\u00e9cnicas formales de revisi\u00f3n contra criterios establecidos.",
+  ej:"Inspecci\u00f3n de dise\u00f1o con roles: autor, moderador, inspector."},
+{id:"revisiones-tecnicas",label:"Revisiones T\u00e9cnicas",level:2,branch:"orange",
+  def:"Evaluaciones de pares sobre productos t\u00e9cnicos.",
+  ej:"Code review donde se identifican 5 bugs potenciales."},
+{id:"inspecciones-formales",label:"Inspecciones Formales (Fagan)",level:2,branch:"orange",
+  def:"Proceso estructurado con roles, checklist y m\u00e9tricas.",
+  ej:"Inspecci\u00f3n con entrada, preparaci\u00f3n, reuni\u00f3n, retrabajo."},
+{id:"walkthroughs",label:"Walkthroughs",level:2,branch:"orange",
+  def:"Revisi\u00f3n informal donde el autor gu\u00eda al equipo.",
+  ej:"Dev presenta dise\u00f1o de API para feedback del equipo."},
+{id:"auditorias-internas",label:"Auditor\u00edas Internas",level:2,branch:"orange",
+  def:"Evaluaciones internas para verificar cumplimiento.",
+  ej:"Auditor\u00eda trimestral de gesti\u00f3n de incidentes."},
+{id:"auditorias-externas",label:"Auditor\u00edas Externas",level:2,branch:"orange",
+  def:"Evaluaciones por organismos externos para certificar normas.",
+  ej:"Auditor\u00eda ISO 9001 por organismo acreditado."},
+{id:"listas-chequeo",label:"Listas de Chequeo",level:1,branch:"orange",
+  def:"Herramientas con \u00edtems de verificaci\u00f3n para asegurar completitud.",
+  ej:"Checklist de 50 \u00edtems para release."},
+{id:"checklist-req",label:"Checklist de Requisitos",level:2,branch:"orange",
+  def:"Verifica completitud, claridad y testabilidad de requisitos.",
+  ej:"Cada requisito debe ser SMART."},
+{id:"checklist-codigo",label:"Checklist de C\u00f3digo",level:2,branch:"orange",
+  def:"\u00cdtems para revisi\u00f3n de c\u00f3digo: estilo, seguridad, rendimiento.",
+  ej:"Sin credenciales hardcodeadas, manejo de errores."},
+{id:"checklist-pruebas",label:"Checklist de Pruebas",level:2,branch:"orange",
+  def:"Verifica cobertura y calidad de las pruebas.",
+  ej:"Cada HU: test feliz, error, l\u00edmite, cobertura >80%."},
+{id:"checklist-deploy",label:"Checklist de Despliegue",level:2,branch:"orange",
+  def:"Pasos previos a producci\u00f3n: backups, migraciones, monitoreo.",
+  ej:"Verificar backup BD, health checks, rollback plan."},
+{id:"errores-defectos-fallas",label:"Errores, Defectos y Fallas",level:1,branch:"purple",
+  def:"Errores humanos causan defectos; defectos activados producen fallas.",
+  ej:"Error >= vs > introduce defecto que causa falla en importes l\u00edmite."},
+{id:"error-humano",label:"Error Humano",level:2,branch:"purple",
+  def:"Acci\u00f3n humana que produce resultado incorrecto.",
+  ej:"Escribir 'if (x = 5)' en vez de 'if (x == 5)'."},
+{id:"defecto",label:"Defecto",level:2,branch:"purple",
+  def:"Imperfecci\u00f3n en el producto que puede causar incumplimiento de funci\u00f3n.",
+  ej:"Variable no inicializada que produce resultados impredecibles."},
+{id:"tipos-defecto",label:"Tipos de Defecto",level:3,branch:"purple",
+  def:"Clasificaci\u00f3n: l\u00f3gicos, interfaz, datos, rendimiento, seguridad.",
+  ej:"SQL injection por no sanitizar entrada del usuario."},
+{id:"falla",label:"Falla",level:2,branch:"purple",
+  def:"Evento donde el software no ejecuta funci\u00f3n requerida.",
+  ej:"Sistema se cae al procesar >10.000 registros."},
+{id:"severidad-prioridad",label:"Severidad vs Prioridad",level:2,branch:"purple",
+  def:"Severidad: impacto t\u00e9cnico. Prioridad: urgencia de correcci\u00f3n.",
+  ej:"Bug alta severidad pero baja prioridad si no es cr\u00edtico para release."},
+{id:"ciclo-vida-defecto",label:"Ciclo de Vida del Defecto",level:2,branch:"purple",
+  def:"Etapas: reportado, asignado, en progreso, resuelto, verificado, cerrado.",
+  ej:"Bug reportado, corregido, verificado por QA, cerrado."},
+{id:"reporte-defecto",label:"Reporte de Defecto",level:3,branch:"purple",
+  def:"Documentaci\u00f3n formal con descripci\u00f3n, pasos, entorno, evidencia.",
+  ej:"Issue en Jira con pasos de reproducci\u00f3n y screenshots."},
+{id:"seguimiento-defecto",label:"Seguimiento de Defectos",level:3,branch:"purple",
+  def:"Monitoreo con herramientas de tracking, m\u00e9tricas y reportes.",
+  ej:"Dashboard con defectos abiertos por severidad."},
+{id:"medicion-metricas",label:"Medici\u00f3n y M\u00e9tricas",level:1,branch:"purple",
+  def:"Asignar valores cuantitativos a atributos para evaluar calidad.",
+  ej:"Medir defectos/KLOC, cobertura, MTTR."},
+{id:"metricas-producto",label:"M\u00e9tricas de Producto",level:2,branch:"purple",
+  def:"Mediciones directas: tama\u00f1o, complejidad, acoplamiento.",
+  ej:"Complejidad ciclom\u00e1tica 15 indica refactorizaci\u00f3n necesaria."},
+{id:"metricas-proceso-m",label:"M\u00e9tricas de Proceso",level:2,branch:"purple",
+  def:"Indicadores del proceso: velocidad, tiempo de ciclo, DRE.",
+  ej:"DRE 85%: 85% defectos detectados antes de producci\u00f3n."},
+{id:"metricas-proyecto",label:"M\u00e9tricas de Proyecto",level:2,branch:"purple",
+  def:"M\u00e9tricas de gesti\u00f3n: desviaci\u00f3n, productividad, costo por defecto.",
+  ej:"5 PF/persona-mes en equipo Java \u00e1gil."},
+{id:"kpi-calidad",label:"KPIs de Calidad",level:2,branch:"purple",
+  def:"Indicadores clave: densidad defectos, cobertura, MTTR, NPS.",
+  ej:"Dashboard: <5 defectos/KLOC, cobertura >80%, MTTR <4h."},
+{id:"densidad-defectos",label:"Densidad de Defectos",level:3,branch:"purple",
+  def:"Defectos por unidad de tama\u00f1o (KLOC).",
+  ej:"3 defectos/KLOC aceptable; >10 requiere revisi\u00f3n."},
+{id:"cobertura-pruebas",label:"Cobertura de Pruebas",level:3,branch:"purple",
+  def:"% de c\u00f3digo ejecutado por pruebas.",
+  ej:"Cobertura de l\u00ednea 85%, rama 78%."},
+{id:"analisis-tendencias",label:"An\u00e1lisis de Tendencias",level:2,branch:"purple",
+  def:"Evoluci\u00f3n de m\u00e9tricas para detectar patrones y riesgos.",
+  ej:"Defectos crecientes 3 sprints indica deuda t\u00e9cnica."},
+{id:"cuadro-mando",label:"Cuadro de Mando (Dashboard)",level:2,branch:"purple",
+  def:"Visualizaci\u00f3n integrada de m\u00e9tricas para decisi\u00f3n basada en datos.",
+  ej:"Dashboard semanal de defectos, cobertura, velocidad."},
+],
+edges:[
+{from:"sqa",to:"calidad"},{from:"sqa",to:"qa"},{from:"sqa",to:"qc"},{from:"sqa",to:"cultura-calidad"},{from:"sqa",to:"estandares"},
+{from:"sqa",to:"calidad-producto"},{from:"sqa",to:"calidad-proceso"},
+{from:"sqa",to:"verificacion-validacion"},{from:"sqa",to:"inspecciones-auditorias"},{from:"sqa",to:"listas-chequeo"},
+{from:"sqa",to:"errores-defectos-fallas"},{from:"sqa",to:"medicion-metricas"},
+{from:"calidad",to:"def-calidad"},{from:"calidad",to:"costo-calidad"},{from:"calidad",to:"tqm"},
+{from:"def-calidad",to:"trascendente"},{from:"def-calidad",to:"basada-usuario"},{from:"def-calidad",to:"basada-producto"},
+{from:"costo-calidad",to:"prevencion"},{from:"costo-calidad",to:"evaluacion"},{from:"costo-calidad",to:"fallas-ext"},
+{from:"qa",to:"procesos-qa"},{from:"qa",to:"plan-qa"},{from:"qa",to:"auditorias-qa"},{from:"qa",to:"mejora-continua"},
+{from:"mejora-continua",to:"pdca"},{from:"mejora-continua",to:"kaizen"},
+{from:"qc",to:"inspeccion"},{from:"qc",to:"pruebas-qc"},{from:"qc",to:"muestreo"},{from:"qc",to:"aceptacion"},
+{from:"cultura-calidad",to:"liderazgo"},{from:"cultura-calidad",to:"participacion"},{from:"cultura-calidad",to:"capacitacion"},
+{from:"estandares",to:"iso-9001"},{from:"estandares",to:"ieee-730"},{from:"estandares",to:"cmmi"},{from:"estandares",to:"iso-25000"},
+{from:"calidad-producto",to:"funcionalidad"},{from:"calidad-producto",to:"confiabilidad"},{from:"calidad-producto",to:"usabilidad"},{from:"calidad-producto",to:"eficiencia"},{from:"calidad-producto",to:"mantenibilidad"},{from:"calidad-producto",to:"portabilidad"},{from:"calidad-producto",to:"seguridad"},
+{from:"calidad-proceso",to:"madurez-proceso"},{from:"calidad-proceso",to:"cumplimiento"},{from:"calidad-proceso",to:"eficacia-proceso"},{from:"calidad-proceso",to:"metricas-proceso"},{from:"calidad-proceso",to:"mejora-procesos"},
+{from:"verificacion-validacion",to:"verificacion"},{from:"verificacion-validacion",to:"validacion"},{from:"verificacion-validacion",to:"pruebas-unitarias"},{from:"verificacion-validacion",to:"pruebas-integracion"},{from:"verificacion-validacion",to:"pruebas-sistema"},{from:"verificacion-validacion",to:"pruebas-aceptacion"},{from:"verificacion-validacion",to:"pruebas-regresion"},
+{from:"verificacion",to:"verificacion-estatica"},{from:"validacion",to:"validacion-dinamica"},{from:"pruebas-unitarias",to:"tdd"},{from:"pruebas-integracion",to:"integracion-continua"},{from:"pruebas-sistema",to:"pruebas-rendimiento"},
+{from:"inspecciones-auditorias",to:"revisiones-tecnicas"},{from:"inspecciones-auditorias",to:"inspecciones-formales"},{from:"inspecciones-auditorias",to:"walkthroughs"},{from:"inspecciones-auditorias",to:"auditorias-internas"},{from:"inspecciones-auditorias",to:"auditorias-externas"},
+{from:"listas-chequeo",to:"checklist-req"},{from:"listas-chequeo",to:"checklist-codigo"},{from:"listas-chequeo",to:"checklist-pruebas"},{from:"listas-chequeo",to:"checklist-deploy"},
+{from:"errores-defectos-fallas",to:"error-humano"},{from:"errores-defectos-fallas",to:"defecto"},{from:"errores-defectos-fallas",to:"falla"},{from:"errores-defectos-fallas",to:"severidad-prioridad"},{from:"errores-defectos-fallas",to:"ciclo-vida-defecto"},
+{from:"defecto",to:"tipos-defecto"},{from:"ciclo-vida-defecto",to:"reporte-defecto"},{from:"ciclo-vida-defecto",to:"seguimiento-defecto"},
+{from:"medicion-metricas",to:"metricas-producto"},{from:"medicion-metricas",to:"metricas-proceso-m"},{from:"medicion-metricas",to:"metricas-proyecto"},{from:"medicion-metricas",to:"kpi-calidad"},{from:"medicion-metricas",to:"analisis-tendencias"},{from:"medicion-metricas",to:"cuadro-mando"},
+{from:"kpi-calidad",to:"densidad-defectos"},{from:"kpi-calidad",to:"cobertura-pruebas"},
+],
+crossLinks:[
+{from:"estandares",to:"verificacion",label:"establece criterios"},{from:"iso-9001",to:"auditorias-internas",label:"exige auditor\u00edas"},
+{from:"iso-25000",to:"funcionalidad",label:"define caracter\u00edsticas"},{from:"cmmi",to:"madurez-proceso",label:"modelo de madurez"},
+{from:"calidad",to:"errores-defectos-fallas",label:"tolerancia a defectos"},{from:"qa",to:"calidad-proceso",label:"asegura proceso"},
+{from:"qc",to:"calidad-producto",label:"controla producto"},{from:"mejora-continua",to:"calidad-proceso",label:"optimiza procesos"},
+{from:"pruebas-qc",to:"calidad-producto",label:"validan producto"},{from:"verificacion",to:"listas-chequeo",label:"usa checklists"},
+{from:"calidad-producto",to:"metricas-producto",label:"se mide con m\u00e9tricas"},{from:"calidad-proceso",to:"metricas-proceso-m",label:"evaluado por m\u00e9tricas"},
+{from:"inspecciones-formales",to:"defecto",label:"identifican defectos"},{from:"auditorias-qa",to:"cumplimiento",label:"verifican cumplimiento"},
+{from:"costo-calidad",to:"kpi-calidad",label:"KPI fundamental"},{from:"validacion",to:"pruebas-aceptacion",label:"aceptaci\u00f3n del cliente"},
+]};
+
+/* ========================================================================= */
+/* LAYOUT — 4 columns with 2-subcolumn L2 distribution                      */
+/* ========================================================================= */
+const W = 3200, NODE_H = {0:54,1:40,2:34,3:28};
+const G = {l1:14,l2:8,l3:6,group:24};
+
+const COL = {
+  blue:   {x:20,  w:760},
+  green:  {x:810, w:760},
+  orange: {x:1600,w:760},
+  purple: {x:2390,w:760},
+};
+const SUB_W = 360, SUB_GAP = 40;
+const ROOT = {x:1100,w:1000,y:16};
+
+const L1_ORDER = {
+  blue:["calidad","qa","qc","cultura-calidad","estandares"],
+  green:["calidad-producto","calidad-proceso"],
+  orange:["verificacion-validacion","inspecciones-auditorias","listas-chequeo"],
+  purple:["errores-defectos-fallas","medicion-metricas"],
+};
+
+let WORLD_H = 800;
+
+function computePositions(d) {
+  const byId = {}; d.nodes.forEach(n => byId[n.id] = n);
+  const ch = {}; d.edges.forEach(e => (ch[e.from] = ch[e.from]||[]).push(e.to));
+
+  byId["sqa"]._x = ROOT.x; byId["sqa"]._y = ROOT.y; byId["sqa"]._w = ROOT.w;
+
+  const START_Y = ROOT.y + NODE_H[0] + 40;
+  let maxY = START_Y;
+
+  Object.entries(L1_ORDER).forEach(([branch, l1ids]) => {
+    const col = COL[branch];
+    let curY = START_Y;
+
+    l1ids.forEach(l1id => {
+      const l1 = byId[l1id]; if (!l1) return;
+      l1._x = col.x; l1._y = curY; l1._w = col.w;
+      curY += NODE_H[1] + G.l1;
+
+      // L2 children in 2 sub-columns
+      const l2kids = (ch[l1id]||[]).map(id=>byId[id]).filter(n=>n&&n.level===2);
+      if (!l2kids.length) { curY += G.group; return; }
+
+      const subL = col.x;
+      const subR = col.x + SUB_W + SUB_GAP;
+      let yL = curY, yR = curY;
+
+      l2kids.forEach((l2, i) => {
+        const isLeft = i % 2 === 0;
+        const sx = isLeft ? subL : subR;
+        const sy = isLeft ? yL : yR;
+
+        l2._x = sx; l2._y = sy; l2._w = SUB_W;
+
+        let childY = sy + NODE_H[2] + G.l2;
+        const l3kids = (ch[l2.id]||[]).map(id=>byId[id]).filter(n=>n&&n.level===3);
+        l3kids.forEach(l3 => {
+          l3._x = sx + 16; l3._y = childY; l3._w = SUB_W - 16;
+          childY += NODE_H[3] + G.l3;
+        });
+
+        if (isLeft) yL = childY + G.l2;
+        else yR = childY + G.l2;
+      });
+
+      curY = Math.max(yL, yR) + G.group;
+    });
+    maxY = Math.max(maxY, curY);
+  });
+
+  WORLD_H = maxY + 60;
+}
+
+function branchOf(n) { return BRANCH_MAP[n.branch] || "sky"; }
+function colorOf(b) { return BRANCH_COLORS[b] || "#8b95a8"; }
+
+/* ========================================================================= */
+/* RENDER                                                                    */
+/* ========================================================================= */
+function renderNodes(d) {
+  const c = document.getElementById("nodes");
+  const mc = document.getElementById("map-container");
+  c.innerHTML = ""; mc.style.width = W+"px"; mc.style.height = WORLD_H+"px";
+
+  d.nodes.forEach((n,i) => {
+    if (n._y == null) return;
+    const el = document.createElement("div");
+    el.id = "n-"+n.id;
+    el.className = "node level-"+n.level+" branch-"+branchOf(n);
+    el.textContent = n.label;
+    el.style.cssText = "left:"+n._x+"px;top:"+n._y+"px;width:"+n._w+"px;animation-delay:"+(0.02+i*0.008)+"s";
+    el.dataset.id = n.id;
+    c.appendChild(el);
+  });
+}
+
+function nPos(id) {
+  const el = document.getElementById("n-"+id); if (!el) return null;
+  return {b:el.offsetTop+el.offsetHeight, t:el.offsetTop, cx:el.offsetLeft+el.offsetWidth/2, h:el.offsetHeight};
+}
+
+function renderConns(d) {
+  const svg = document.getElementById("connections");
+  svg.setAttribute("width",W); svg.setAttribute("height",WORLD_H);
+  svg.querySelectorAll(".conn-path,.cross-label").forEach(e=>e.remove());
+
+  d.edges.forEach(e => {
+    const f=nPos(e.from),t=nPos(e.to); if(!f||!t) return;
+    const fn=d.nodes.find(x=>x.id===e.from); if(!fn) return;
+    const col = fn.branch==="root" ? "sky" : branchOf(fn);
+    const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+    p.setAttribute("class","conn-path hierarchy");
+    p.dataset.from=e.from; p.dataset.to=e.to;
+    const my=(f.b+t.t)/2;
+    p.setAttribute("d","M"+f.cx+","+f.b+"C"+f.cx+","+my+" "+t.cx+","+my+" "+t.cx+","+t.t);
+    p.setAttribute("stroke",colorOf(col));
+    svg.appendChild(p);
+  });
+  d.crossLinks.forEach(l => {
+    const f=nPos(l.from),t=nPos(l.to); if(!f||!t) return;
+    const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+    p.setAttribute("class","conn-path crosslink");
+    p.dataset.from=l.from; p.dataset.to=l.to;
+    const my=(f.b+t.t)/2;
+    p.setAttribute("d","M"+f.cx+","+f.b+"C"+f.cx+","+my+" "+t.cx+","+my+" "+t.cx+","+t.t);
+    p.setAttribute("stroke","#525c6e");
+    svg.appendChild(p);
+  });
+}
+
+/* ========================================================================= */
+/* TOOLTIP + HIGHLIGHT                                                       */
+/* ========================================================================= */
+let isPanning = false;
+function attachNodeEvents(d) {
+  const wrap = document.getElementById("nodes");
+  wrap.addEventListener("mouseenter", e => {
+    const el = e.target.closest(".node"); if (!el || isPanning) return;
+    const id = el.dataset.id, n = d.nodes.find(x=>x.id===id); if (!n) return;
+    const br = branchOf(n), c = colorOf(br);
+    const tt = document.getElementById("tooltip");
+    const badgeBg = c.replace(")",",0.15)").replace("rgb","rgba");
+    tt.innerHTML =
+      '<div class="tt-badge" style="background:'+badgeBg+';color:'+c+'">'+(BRANCH_LABELS[br]||"")+'</div>'+
+      '<div class="tt-title" style="color:'+c+'">'+n.label+'</div>'+
+      '<div class="tt-def">'+n.def+'</div>'+
+      '<div class="tt-example"><strong>Ejemplo</strong>'+n.ej+'</div>';
+    tt.classList.add("visible");
+    const r = el.getBoundingClientRect();
+    let tx=r.left+20, ty=r.top-10-tt.offsetHeight;
+    if(ty<10) ty=r.bottom+10;
+    if(tx+380>innerWidth) tx=innerWidth-390;
+    if(tx<10) tx=10;
+    tt.style.left=tx+"px"; tt.style.top=ty+"px";
+
+    const from=d.edges.filter(x=>x.from===id).map(x=>x.to);
+    const to=d.edges.filter(x=>x.to===id).map(x=>x.from);
+    const cf=d.crossLinks.filter(x=>x.from===id).map(x=>x.to);
+    const ct=d.crossLinks.filter(x=>x.to===id).map(x=>x.from);
+    const conn=new Set([...from,...to,...cf,...ct,id]);
+    document.querySelectorAll(".node").forEach(nn=>{
+      conn.has(nn.dataset.id)?nn.classList.replace("faded","highlighted")||nn.classList.add("highlighted"):
+        nn.classList.replace("highlighted","faded")||nn.classList.add("faded");
+    });
+    document.querySelectorAll(".conn-path").forEach(pp=>{
+      (conn.has(pp.dataset.from)&&conn.has(pp.dataset.to))?
+        (pp.classList.remove("faded"),pp.classList.add("highlighted")):
+        (pp.classList.add("faded"),pp.classList.remove("highlighted"));
+    });
+  },true);
+
+  const clear=()=>{
+    document.getElementById("tooltip").classList.remove("visible");
+    document.querySelectorAll(".node").forEach(n=>n.classList.remove("faded","highlighted"));
+    document.querySelectorAll(".conn-path").forEach(p=>p.classList.remove("faded","highlighted"));
+  };
+  wrap.addEventListener("mouseleave",e=>{if(e.target.closest(".node"))setTimeout(clear,80)},true);
+  document.getElementById("map-container").addEventListener("mouseleave",clear);
+}
+
+/* ========================================================================= */
+/* PAN + ZOOM                                                                */
+/* ========================================================================= */
+let px=0,py=0,zm=1,psx=0,psy=0,ppx=0,ppy=0;
+const MN=0.12,MX=3;
+const vp=()=>document.getElementById("viewport"), cv=()=>document.getElementById("canvas");
+
+function apply(){
+  cv().style.transform="translate("+px+"px,"+py+"px)scale("+zm+")";
+  document.getElementById("zoom-pct").textContent=Math.round(zm*100)+"%";
+  updateMinimap();
+}
+function onDown(e){
+  if(e.target.closest(".node,.nav-item,#zoom-bar,#legend,#minimap,#nav-panel,#nav-toggle")) return;
+  isPanning=true;psx=e.clientX;psy=e.clientY;ppx=px;ppy=py;vp().classList.add("grabbing");e.preventDefault();
+}
+function onMove(e){if(!isPanning)return;px=ppx+(e.clientX-psx);py=ppy+(e.clientY-psy);apply()}
+function onUp(){isPanning=false;vp().classList.remove("grabbing")}
+function onWheel(e){
+  if(e.target.closest("#minimap,#nav-panel")) return;
+  e.preventDefault();
+  const r=vp().getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  const nz=Math.max(MN,Math.min(MX,zm*(1-e.deltaY*0.001)));
+  const f=nz/zm; px=mx-f*(mx-px); py=my-f*(my-py); zm=nz; apply();
+}
+function zoomBtn(f){const r=vp().getBoundingClientRect(),cx=r.width/2,cy=r.height/2;
+  const nz=Math.max(MN,Math.min(MX,zm*f)),ff=nz/zm;px=cx-ff*(cx-px);py=cy-ff*(cy-py);zm=nz;apply()}
+function fitView(){
+  const r=vp().getBoundingClientRect(),pad=50;
+  const sx=(r.width-pad*2)/W,sy=(r.height-pad*2)/WORLD_H;
+  zm=Math.min(sx,sy,1);px=(r.width-W*zm)/2;py=(r.height-WORLD_H*zm)/2;apply();
+}
+function panToNode(id){
+  const el=document.getElementById("n-"+id); if(!el) return;
+  const r=vp().getBoundingClientRect();
+  px=r.width/2-(el.offsetLeft+el.offsetWidth/2)*zm;
+  py=r.height/2-(el.offsetTop+el.offsetHeight/2)*zm;
+  apply();
+  // flash the node
+  el.style.transition="box-shadow 0.3s";
+  el.style.boxShadow="0 0 30px rgba(240,192,64,0.5)";
+  setTimeout(()=>{el.style.boxShadow=""},1200);
+}
+
+/* ========================================================================= */
+/* MINIMAP                                                                   */
+/* ========================================================================= */
+function updateMinimap(){
+  const mm=document.getElementById("minimap"),cvs=mm.querySelector("canvas"),vr=mm.querySelector(".vp-rect");
+  const mw=mm.offsetWidth,mh=mm.offsetHeight; if(!mw) return;
+  const dpr=devicePixelRatio||1; cvs.width=mw*dpr; cvs.height=mh*dpr;
+  const ctx=cvs.getContext("2d"); ctx.scale(dpr,dpr); ctx.clearRect(0,0,mw,mh);
+  const sx=mw/W,sy=mh/WORLD_H;
+  data.nodes.forEach(n=>{if(n._y==null)return;
+    ctx.fillStyle=colorOf(branchOf(n)); ctx.globalAlpha=n.level===0?1:0.5;
+    ctx.beginPath(); const rx=n._x*sx,ry=n._y*sy,rw=Math.max(n._w*sx,2),rh=Math.max((NODE_H[n.level]||28)*sy,1.5);
+    ctx.roundRect(rx,ry,rw,rh,1); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+  const vpW=innerWidth,vpH=innerHeight;
+  vr.style.left=Math.max(0,(-px/zm)*sx)+"px";
+  vr.style.top=Math.max(0,(-py/zm)*sy)+"px";
+  vr.style.width=Math.min((vpW/zm)*sx,mw)+"px";
+  vr.style.height=Math.min((vpH/zm)*sy,mh)+"px";
+}
+document.getElementById("minimap").addEventListener("click",e=>{
+  const r=e.currentTarget.getBoundingClientRect();
+  const mx=(e.clientX-r.left)/r.width,my=(e.clientY-r.top)/r.height;
+  px=-(mx*W*zm)+innerWidth/2; py=-(my*WORLD_H*zm)+innerHeight/2; apply();
+});
+
+/* ========================================================================= */
+/* QUICK NAV PANEL                                                           */
+/* ========================================================================= */
+function buildNav(){
+  const list=document.getElementById("nav-list");
+  const sections={blue:"Fundamentos",green:"Dimensiones",orange:"Actividades",purple:"Defectos y M\u00e9tricas"};
+  Object.entries(L1_ORDER).forEach(([branch,l1ids])=>{
+    const sec=document.createElement("div"); sec.className="nav-section";
+    sec.textContent=sections[branch]||branch; list.appendChild(sec);
+    const ch={}; data.edges.forEach(e=>(ch[e.from]=ch[e.from]||[]).push(e.to));
+    l1ids.forEach(l1id=>{
+      const n=data.nodes.find(x=>x.id===l1id); if(!n) return;
+      addNavItem(list,n,"l1",branch);
+      (ch[l1id]||[]).forEach(l2id=>{
+        const n2=data.nodes.find(x=>x.id===l2id); if(!n2||n2.level!==2) return;
+        addNavItem(list,n2,"l2",branch);
+        (ch[l2id]||[]).forEach(l3id=>{
+          const n3=data.nodes.find(x=>x.id===l3id); if(!n3||n3.level!==3) return;
+          addNavItem(list,n3,"l3",branch);
+        });
+      });
+    });
+  });
+}
+function addNavItem(list,n,cls,branch){
+  const d=document.createElement("div"); d.className="nav-item "+cls; d.dataset.id=n.id;
+  const dot=document.createElement("div"); dot.className="nav-dot";
+  dot.style.background=colorOf(BRANCH_MAP[branch]);
+  d.appendChild(dot);
+  const span=document.createElement("span"); span.textContent=n.label; d.appendChild(span);
+  d.addEventListener("click",()=>{panToNode(n.id);document.getElementById("nav-panel").classList.remove("open")});
+  list.appendChild(d);
+}
+document.getElementById("nav-toggle").addEventListener("click",()=>{
+  document.getElementById("nav-panel").classList.toggle("open");
+  const s=document.getElementById("nav-search"); if(document.getElementById("nav-panel").classList.contains("open")) s.focus();
+});
+document.getElementById("nav-search").addEventListener("input",e=>{
+  const q=e.target.value.toLowerCase();
+  document.querySelectorAll(".nav-item").forEach(it=>{
+    it.style.display=it.textContent.toLowerCase().includes(q)?"":"none";
+  });
+  document.querySelectorAll(".nav-section").forEach(s=>s.style.display=q?"none":"");
+});
+
+/* ========================================================================= */
+/* INIT                                                                      */
+/* ========================================================================= */
+function init(){
+  computePositions(data);renderNodes(data);buildNav();
+  requestAnimationFrame(()=>{renderConns(data);attachNodeEvents(data);fitView()});
+  const v=vp();
+  v.addEventListener("mousedown",onDown);addEventListener("mousemove",onMove);addEventListener("mouseup",onUp);
+  v.addEventListener("wheel",onWheel,{passive:false});
+  document.getElementById("z-in").addEventListener("click",()=>zoomBtn(1.2));
+  document.getElementById("z-out").addEventListener("click",()=>zoomBtn(1/1.2));
+  document.getElementById("z-fit").addEventListener("click",fitView);
+  addEventListener("keydown",e=>{
+    if(e.ctrlKey||e.metaKey){if(e.key==="="||e.key==="+"){e.preventDefault();zoomBtn(1.15)}
+      if(e.key==="-"){e.preventDefault();zoomBtn(1/1.15)}if(e.key==="0"){e.preventDefault();fitView()}}
+    if(e.key===" "&&!e.target.closest("input")){e.preventDefault();fitView()}
+  });
+  let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(()=>{renderConns(data);updateMinimap()},150)});
+}
+addEventListener("DOMContentLoaded",init);
+</script>
+</body>
+</html>

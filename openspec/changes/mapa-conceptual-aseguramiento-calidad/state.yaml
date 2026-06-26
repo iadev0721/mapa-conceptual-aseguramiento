@@ -1,0 +1,10 @@
+change: mapa-conceptual-aseguramiento-calidad
+phase: proposal
+artifacts:
+  explore: true
+  proposal: true
+  specs: false
+  design: false
+  tasks: false
+apply_progress: []
+last_updated: 2026-06-25
